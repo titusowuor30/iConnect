@@ -12,6 +12,14 @@ var app = express();
 //const ConsoleWindow = require("node-hide-console-window");
 const bodyParser = require("body-parser");
 var scananpr = "";
+// const player = require("play-sound")();
+// const audioFile = "C:/iconnect/audio/female/Enter-eng.mp3";
+// player.play(audioFile, (err) => {
+//   if (err) {
+//     console.error("Error playing audio:", err);
+//   }
+// });
+//app.use(bodyParser.json());
 var st = "Z1G 2        00kg";
 console.log("eee" + st.substring(4, 5));
 app.use(bodyParser.json({ type: "*/*" }));
@@ -37,7 +45,7 @@ var scan = 0;
 var veharrive = 0;
 var inserted = 0;
 var prog = 0;
-var bidirectional = false;
+var bidirectional = true;
 var scandeck = "";
 //var stationcode = "SWMMA";
 var endpoint = "http://192.168.9.14:4444/api";
@@ -51,8 +59,7 @@ var stationcode = "ISKEA";
 var stationcode2 = "KESIA";
 //var endpoint = "http://192.168.3.22:4444/api";
 //var stationcode = "ATM1B";
-var endpoint = "https://localhost:44365/api";
-
+//var endpoint = "https://localhost:44365/api";
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 var autoweighReturn = JSON.stringify({});
 var shortAlarm = 15;
@@ -115,7 +122,7 @@ client.on("message", (msg, info) => {
     " kg," +
     weightv[3] +
     " kg, ";
-  //sendtoRDU(readings);
+  sendtoRDU(readings);
   //console.log("Data received from server : " + msg.slice(24,msg.length).toString());
   console.log(
     "Received %d bytes from %s:%d\n",
@@ -125,19 +132,52 @@ client.on("message", (msg, info) => {
   );
 });
 console.log("stationcode:" + stationcode);
+//sending msg
+//client.send(data, 1025, '10.0.0.122', error => {
+//if (error) {
+//    console.log(error)
+//    client.close()
+//} else {
+//    console.log('Data sent !!!')
+//}
+//});
+
+// get port name from the command line:
+
+// list serial ports:
+//let portName = process.argv[2];
+//let baudrate = process.argv[3];
 let portName = "COM1";
 let baudrate = 9600;
-let readings = "  8220 kg, 8080 kg, 0 kg,  0 kg,";
+//  ..let readings = "  10000 kg, 10000 kg, 10000 kg,  10000 kg,";
+//let readings = "  5050 kg, 10000 kg, 16500 kg,  0 kg,";
+let readings = "  8000 kg, 10500 kg, 0 kg,  0 kg,";
 //let readings = "  7100 kg, 19920 kg, 8880 kg,  13880 kg,";
+//let readings = "  10200 kg, 12900 kg,  26900 kg,0 kg, ";
+//let readings = " 888888 kg, 888888 kg, 888888 kg,  888888 kg,";
+//let readings = " 1000 kg,";
+//let readings = " 10200 kg,";
+// SerialPort.list().then(function (ports) {
+//   ports.forEach(function (port) {
+//     console.log("Port: ", port.path);
+//     portName = port.path;
+//   });
+// });
 var runsend = "";
 console.log(portName);
 const myPort = new SerialPort({
   path: portName,
   baudRate: baudrate,
 });
+//parser: SerialPort.parsers.readline("\n")
 const parser = myPort.pipe(new ReadlineParser({ delimiter: "\r" }));
+//parser: new Readline("\n")
+//Readline = SerialPort.parsers.Readline;
+//let parser = new Readline();
+//myPort.pipe(parser);
 myPort.on("open", showPortOpen);
 parser.on("data", readSerialData);
+//myPort.on("close", showPortClose);
 myPort.on("error", showError);
 function showPortOpen() {
   console.log("port open." + portName + " Data rate: " + myPort.baudRate);
@@ -145,9 +185,35 @@ function showPortOpen() {
     if (err) throw err;
     myPort.write([5]);
   }, 1000);
+  //myPort.write("5\n");
 }
+//soundalarm(longAlarm);
 function readSerialData(data) {
   var reads = data;
+  if (indicator == "ZM") {
+    console.log("-------------------------------Starts here---------------------");
+    console.log(data);
+    var mydata = data;
+    const deckW = mydata.split(",");
+    var a = 0;
+    var b = 0;
+    var c = 0;
+    var d = 0;
+    var dd = "";
+    for (var i = 0; i < 4; i++) {
+      try {
+        //var dec1 = deckW[i].substring(0, deckW[i].length - 10).trim();//
+        var dec1 = deckW[i].trim().replace(/[^\d.-]/g, '');
+        dd += dec1 + "kg,";
+      } catch (exception) {}
+    }
+    module.exports.readings = dd;
+    readings = dd;
+    RDU.readings = dd;
+    reads = dd;
+    console.log(dd);
+    sendtoRDU(reads);
+  }
   if (indicator == "Cardinal" && data.length > 89) {
     var mydata = data.substring(0, 90);
 
@@ -169,7 +235,7 @@ function readSerialData(data) {
     readings = dd;
     RDU.readings = dd;
     reads = dd;
-    //sendtoRDU(reads);
+    sendtoRDU(reads);
   }
   if (indicator == "Cardinal2") {
     var dec = data.substring(4, 5);
@@ -195,35 +261,12 @@ function readSerialData(data) {
     RDU.readings = dd;
     reads = dd;
   }
-  if (indicator == "ZM") {
-    console.log("-------------------------------Starts here---------------------");
-    console.log(data);
-    var mydata = data;
-    const deckW = mydata.split(",");
-    var a = 0;
-    var b = 0;
-    var c = 0;
-    var d = 0;
-    var dd = "";
-    for (var i = 0; i < 4; i++) {
-      try {
-        //var dec1 = deckW[i].substring(0, deckW[i].length - 10).trim();//
-        var dec1 = deckW[i].trim().replace(/[^\d.-]/g, '');
-        dd += dec1 + "kg,";
-      } catch (exception) {}
-    }
-    module.exports.readings = dd;
-    readings = dd;
-    RDU.readings = dd;
-    reads = dd;
-    console.log(dd);
-  }
   if (indicator != "Cardinal" && indicator != "Cardinal2" && indicator != "ZM" ) {
     readings = data + ",";
     RDU.readings = data + ",";
     module.exports.readings = data + ",";
     reads = data + ",";
-    //sendtoRDU(reads);
+    sendtoRDU(reads);
   }
 }
 function sendtoRDU(reads) {
@@ -526,18 +569,15 @@ function callseeweight() {
         //console.log(resp.data[0]);
         autoweighReturn = resp.data;
         var anprip =
-          "http://192.168.5.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
-        anprip =
-          "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.5.57:80/jpg/image.jpg?size=3";
-
+          "http://192.168.2.103:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Hawk2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         //var JURUA ="http://192.168.51.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         if (scandeck == "A") {
           anprip =
-            "http://192.168.3.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Admin1234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.2.103:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Hawk2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         if (scandeck == "D") {
           anprip =
-            "http://192.168.3.100:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Admin1234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.2.104:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         var theUrlanpr =
           endpoint +
@@ -588,18 +628,15 @@ function callseeweight() {
         // "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.51.104:80/cgi-bin/viewer/video.jpg&dir=";
 
         var overviewip =
-          "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.51.104:80/cgi-bin/viewer/video.jpg&dir=";
-        overviewip =
-          "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.5.52:80/jpg/image.jpg?size=3";
-
+          "http://192.168.2.105:5002/kenload/dashboard/getimg.php?string=http://192.168.2.105:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         //var JURUA ="http://192.168.51.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         if (scandeck == "A") {
           overviewip =
-            "http://192.168.3.22:5002/kenload/dashboard/getimg.php?string=http://192.168.3.111:80/cgi-bin/viewer/video.jpg&dir=";
+            "http://192.168.2.105:5002/kenload/dashboard/getimg.php?string=http://192.168.2.105:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         if (scandeck == "D") {
           overviewip =
-            "http://192.168.3.22:5002/kenload/dashboard/getimg.php?string=http://192.168.3.110:80/cgi-bin/viewer/video.jpg&dir=";
+            "http://192.168.2.104:5002/kenload/dashboard/getimg.php?string=http://192.168.2.105:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         var myUrloverview =
           overviewip +
@@ -618,11 +655,11 @@ function callseeweight() {
         if (scandeck != "") {
           if (scandeck == "D") {
             anprip =
-              "http://192.168.3.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Admin1234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+              "http://192.168.2.103:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
           }
           if (scandeck == "A") {
             anprip =
-              "http://192.168.3.100:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Admin1234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+              "http://192.168.2.103:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Hawk2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
           }
           var theUrlanpr3 =
             endpoint +
