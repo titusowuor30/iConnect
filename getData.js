@@ -26,10 +26,10 @@ var scan = 0;
 var veharrive = 0;
 var inserted = 0;
 var prog = 0;
-var bidirectional = false;
+var bidirectional = true;
 var scandeck = "";
-var stationcode = "WBELA";
-var stationcode2 = "";
+var stationcode = "MLELA";
+var stationcode2 = "ELMLA";
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 var autoweighReturn = JSON.stringify({});
 var shortAlarm = 15;
@@ -45,7 +45,7 @@ var headers = {
 var scalestatus = "";
 const portNumber = 3031;
 var scananpr="";
-const serialPortName = 'COM6'; // Update to match your port name
+const serialPortName = 'COM1'; // Update to match your port name
 const baudRate = 9600;
 const enquiryCommand = Buffer.from([0x05]); // ENQ command in ASCII
 var endpoint = "http://192.168.4.115:4444/api";
@@ -89,12 +89,32 @@ serialPort.on('open', () => {
       }
       console.log('Enquiry command sent.');
     });
-  }, 2000); // Send the enquiry command every 2 seconds
+  }, 1000); // Send the enquiry command every 20.5 seconds
 });
 
 parser.on('data',readSerialData);
 function readSerialData(data) {
   var reads = data;
+  if (indicator == "1310") {
+    const scaleMatch = data.match(/Scale No:\s+(\d+)/);
+    if (scaleMatch) {
+      const scaleNumber = parseInt(scaleMatch[1], 10);
+      currentScale = `scale${scaleNumber}`;
+      console.log(currentScale)
+    }
+    const grossWeightMatch = data.match(/^G\s+(-?\d+)\s*kg/);
+    if (grossWeightMatch && currentScale) {
+      console.log(`matched gaw:${grossWeightMatch} <===>   scale:${currentScale} `)
+      latestWeights[currentScale] = parseInt(grossWeightMatch[1], 10);
+      readings = `${latestWeights.scale1 || 0} kg, ${latestWeights.scale2 || 0} kg, ${latestWeights.scale3 || 0} kg, ${latestWeights.scale4 || 0} kg,`;
+      module.exports.readings=readings;
+      RDU.readings=readings;
+      reads=readings;
+      sendtoRDU(reads)
+      console.log("Readings=>"+readings);
+      currentScale = null; // Reset current scale
+    }
+  }
   if (indicator == "Cardinal" && data.length > 89) {
     var mydata = data.substring(0, 90);
 
@@ -165,25 +185,6 @@ function readSerialData(data) {
     reads = dd;
     console.log(dd);
   }
-  if (indicator == "1310") {
-    const scaleMatch = data.match(/Scale No:\s+(\d+)/);
-    if (scaleMatch) {
-      const scaleNumber = parseInt(scaleMatch[1], 10);
-      currentScale = `scale${scaleNumber}`;
-      console.log(currentScale)
-    }
-    const grossWeightMatch = data.match(/^G\s+(-?\d+)\s*kg/);
-    if (grossWeightMatch && currentScale) {
-      console.log(`matched gaw:${grossWeightMatch} <===>   scale:${currentScale} `)
-      latestWeights[currentScale] = parseInt(grossWeightMatch[1], 10);
-      readings = `${latestWeights.scale1 || 0} kg, ${latestWeights.scale2 || 0} kg, ${latestWeights.scale3 || 0} kg, ${latestWeights.scale4 || 0} kg,`;
-      module.exports.readings=readings;
-      RDU.readings=readings;
-      reads=readings;
-      console.log("Readings=>"+readings);
-      currentScale = null; // Reset current scale
-    }
-  }
 }
 function sendtoRDU(reads) {
   RDU1.readings = reads.trim();
@@ -245,7 +246,7 @@ function soundalarm(alarm) {
   };
   axios
     .post(
-      endpoint + "/autoweigh/alarm?ipaddress=192.168.0.3&alarm=" + alarm,
+      endpoint + "/autoweigh/alarm?ipaddress=192.168.4.105&alarm=" + alarm,
       autoweighReturn,
       headers,
     )
@@ -441,16 +442,16 @@ function callseeweight() {
         autoweighReturn = resp.data;
         var anprip =
           "http://192.168.4.11:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
-        anprip =
-          "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.4.57:80/jpg/image.jpg?size=3";
+        // anprip =
+        //   "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.4.57:80/jpg/image.jpg?size=3";
 
         if (scandeck == "A") {
           anprip =
-            "http://192.168.4.11:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.4.11:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         if (scandeck == "D") {
           anprip =
-            "http://192.168.4.12:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.4.12:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         var theUrlanpr =
           endpoint +
@@ -477,17 +478,14 @@ function callseeweight() {
             console.log(e);
           });
         var overviewip =
-          "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.51.104:80/cgi-bin/viewer/video.jpg&dir=";
-        overviewip =
-          "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.5.52:80/jpg/image.jpg?size=3";
-
+          "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.4.10:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         if (scandeck == "A") {
           overviewip =
-            "http://192.168.3.22:5002/kenload/dashboard/getimg.php?string=http://192.168.3.111:80/cgi-bin/viewer/video.jpg&dir=";
+            "http://192.168.3.22:5002/kenload/dashboard/getimg.php?string=http://192.168.3.111:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         if (scandeck == "D") {
           overviewip =
-            "http://192.168.3.22:5002/kenload/dashboard/getimg.php?string=http://192.168.3.110:80/cgi-bin/viewer/video.jpg&dir=";
+            "http://192.168.4.10:5002/kenload/dashboard/getimg.php?string=http://192.168.3.110:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         var myUrloverview =
           overviewip +
@@ -506,11 +504,11 @@ function callseeweight() {
         if (scandeck != "") {
           if (scandeck == "D") {
             anprip =
-              "http://192.168.3.101:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+              "http://192.168.4.12:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
           }
           if (scandeck == "A") {
             anprip =
-              "http://192.168.3.100:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+              "http://192.168.4.11:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
           }
           var theUrlanpr3 =
             endpoint +

@@ -1,5 +1,5 @@
 {
-  "name": "IconnectV1",
+  "name": "IconnectWBELD",
   "version": "1.0.0",
   "description": "Iconnect for scale connections",
   "main": "main.js",
@@ -14,7 +14,7 @@
     "tutorial",
     "demo"
   ],
-  "author": "Zeph",
+  "author": "Zeph & Titus",
   "license": "CC0-1.0",
   "devDependencies": {
     "electron": "^21.0.1"

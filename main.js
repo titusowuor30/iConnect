@@ -2,6 +2,7 @@
 const electronApp = require('electron').app;
 const electronBrowserWindow = require('electron').BrowserWindow;
 const electronIpcMain = require('electron').ipcMain;
+//const sqlite = require('sqlite-electron')
 
 const nodePath = require("path");
 
@@ -36,7 +37,19 @@ function createWindow() {
   })
   return mainwindow;
 }
-
+function focusCheckInterval() {
+  setInterval(() => {
+    if (!window.isFocused()) {
+      window.show();
+      window.setAlwaysOnTop(true); // Make it overlay other apps
+      window.focus(); // Focus the window
+      setTimeout(() => {
+        window.setAlwaysOnTop(false); // Restore normal state
+        window.minimize();
+      }, 1500); // Keep it on top for 2 seconds
+    }
+  }, 120000); // Check every 2 minutes
+}
 function showMainWindow() {
   window.loadFile('index.html')
     .then(() => { window.show(); window.maximize(); })
@@ -45,7 +58,10 @@ function showMainWindow() {
 function showLoginWindow() {
   // window.loadURL('https://www.your-site.com/login')
   window.loadFile('pages/sign-in.html') // For testing purposes only
-    .then(() => { window.show(); window.maximize(); })
+    .then(() => { 
+      window.show();
+       window.maximize(); 
+      })
 }
 function showLockedOutWindow() {
   // window.loadURL('https://www.your-site.com/login')
@@ -56,8 +72,10 @@ function settingsWindow() {
   window.loadFile('settings.html') // For testing purposes only
 }
 electronApp.on('ready', () => {
+  //sqlite.dbPath = 'settings.db';
   window = createWindow();
   showLoginWindow();
+  focusCheckInterval(); // Start the focus check
 });
 
 electronApp.on('window-all-closed', () => {
@@ -92,7 +110,33 @@ electronIpcMain.on('message:settings', (event, session) => {
   settingsWindow();
 })
 
+// electronIpcMain.handle('potd', (event, dbPath) => {
+//   //sqlite.dbPath = dbPath
+//   return true
+// })
+// electronIpcMain.handle('executeQuery', async (event, query, fetch, value) => {
+//   try {
+//     return await sqlite.executeQuery(query, fetch, value);
+//   } catch (error) {
+//     return error
+//   }
+// })
 
+// electronIpcMain.handle('executeMany', async (event, query, values) => {
+//   try {
+//     return await sqlite.executeMany(query, values)
+//   } catch (error) {
+//     return error
+//   }
+// })
+
+// electronIpcMain.handle('executeScript', async (event, scriptpath) => {
+//   try {
+//     return await sqlite.executeScript(scriptpath);
+//   } catch (error) {
+//     return error
+//   }
+// })
 // Modules to control application life and create native browser window
 // const { app, BrowserWindow } = require('electron')
 // const path = require('path')

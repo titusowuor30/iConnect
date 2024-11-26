@@ -1,26 +1,36 @@
 const axios = require("axios");
 
 const SerialPort = require("serialport").SerialPort;
+//const Readline = SerialPort.parsers.Readline;
+const indicator = "ZM";
 const { ReadlineParser } = require("@serialport/parser-readline");
 var net = require("net");
 const fs = require("fs");
 const cors = require("cors");
 var express = require("express");
 var app = express();
+//const ConsoleWindow = require("node-hide-console-window");
 const bodyParser = require("body-parser");
 var scananpr = "";
 var st = "Z1G 2        00kg";
-const indicator = "1310";
 console.log("eee" + st.substring(4, 5));
 app.use(bodyParser.json({ type: "*/*" }));
+//app.use(bodyParser.urlencoded({ extended: true }));
+//app.use(express.json());
 const RDU = require("./serialout.js");
 const RDU1 = require("./serialout1.js");
 const RDU2 = require("./serialout2.js");
 const RDU3 = require("./serialout3.js");
 const RDU4 = require("./serialout4.js");
 const RDU5 = require("./serialout5.js");
-const { error } = require("console");
+var sockets = [];
+var port = 3030;
+var remoteHost = "127.0.0.1";
+var remotePort = 3030;
+var SCALE = [];
 var results = "No Value";
+var server = "localhost";
+var serverport = 44365;
 var weightaken = 0;
 var scanned = 0;
 var scan = 0;
@@ -29,16 +39,20 @@ var inserted = 0;
 var prog = 0;
 var bidirectional = false;
 var scandeck = "";
-const enquiryCommand = Buffer.from([0x05]); // ENQ command in ASCII
-var endpoint = "http://192.168.4.115:4444/api";
+//var stationcode = "SWMMA";
+var endpoint = "http://192.168.9.14:4444/api";
 
 var dec1 = 0;
 var dec2 = 0;
 var dec3 = 0;
 var dec4 = 0;
 
-var stationcode = "WBELA";
-var stationcode2 = "";
+var stationcode = "ISKEA";
+var stationcode2 = "KESIA";
+//var endpoint = "http://192.168.3.22:4444/api";
+//var stationcode = "ATM1B";
+var endpoint = "https://localhost:44365/api";
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 var autoweighReturn = JSON.stringify({});
 var shortAlarm = 15;
@@ -52,71 +66,86 @@ var headers = {
   },
 };
 var scalestatus = "";
-
-console.log("stationcode:" + stationcode);
-let portName = "COM6";
-let baudrate = 9600;
-var readings = "  0 kg, 0 kg, 0 kg,  0 kg,";
-let latestWeights = {
-  scale1: null,
-  scale2: null,
-  scale3: null,
-  scale4: null
-};
-var runsend = "";
-const myPort = new SerialPort(
-  {
-    path: portName, // Make sure `path` is defined
-    baudRate: baudrate,
-  },
-  (err) => {
-    if (err) {
-      return console.error(`Error opening serial port ${portName}:`, err.message);
+const udp = require("dgram");
+const client = udp.createSocket("udp4");
+client.bind(13805);
+//buffer msg
+const data = Buffer.from("#01\r");
+client.on("message", (msg, info) => {
+  var str = "";
+  var va = 0;
+  Array.from(msg.slice(24, msg.length), function (byte) {
+    //str+=va+" "+(byte & 0xFF).toString(16)+" ";
+    var sadio = (byte & 0xff).toString(16);
+    if (sadio.length == 1) {
+      str += "0" + (byte & 0xff).toString(16) + " ";
+    } else {
+      str += (byte & 0xff).toString(16) + " ";
     }
-    console.log(`Connected to ${portName} at ${baudrate} baud.`);
+    va++;
+  }).join("");
+  console.log(" end");
+  console.log(str);
+  var weih = str.split(" ");
+  var weightv = new Array(4);
+  weightv[0] = "";
+  weightv[1] = "";
+  weightv[2] = "";
+  weightv[3] = "";
+  var g = 120;
+  for (var i = 0; i < 4; i++) {
+    var stable = weih[g];
+    //if (stable==1){
+
+    weightv[i] = getweight(
+      "0x" + weih[g + 4] + weih[g + 3] + weih[g + 2] + weih[g + 1],
+    );
+    console.log(weightv[i]);
+    //}
+
+    g = g + 5;
   }
-);
-//parser: SerialPort.parsers.readline("\n")
+  readings =
+    "  " +
+    weightv[0] +
+    " kg," +
+    weightv[1] +
+    " kg," +
+    weightv[2] +
+    " kg," +
+    weightv[3] +
+    " kg, ";
+  //sendtoRDU(readings);
+  //console.log("Data received from server : " + msg.slice(24,msg.length).toString());
+  console.log(
+    "Received %d bytes from %s:%d\n",
+    msg.length,
+    info.address,
+    info.port,
+  );
+});
+console.log("stationcode:" + stationcode);
+let portName = "COM1";
+let baudrate = 9600;
+let readings = "  8220 kg, 8080 kg, 0 kg,  0 kg,";
+//let readings = "  7100 kg, 19920 kg, 8880 kg,  13880 kg,";
+var runsend = "";
+console.log(portName);
+const myPort = new SerialPort({
+  path: portName,
+  baudRate: baudrate,
+});
 const parser = myPort.pipe(new ReadlineParser({ delimiter: "\r" }));
-myPort.on("open", ()=>{
+myPort.on("open", showPortOpen);
+parser.on("data", readSerialData);
+myPort.on("error", showError);
+function showPortOpen() {
   console.log("port open." + portName + " Data rate: " + myPort.baudRate);
   runsend = setInterval((err) => {
     if (err) throw err;
-    myPort.write(enquiryCommand, (err) => {
-      if (err) {
-        return console.error('Error writing to serial port:', err.message);
-      }
-      console.log('Enquiry command sent.');
-    });
+    myPort.write([5]);
   }, 1000);
-});
-parser.on('data', (data) => {
-  // Check for scale number
-  //console.log(data)
-  const scaleMatch = data.match(/Scale No:\s+(\d+)/);
-  if (scaleMatch) {
-    const scaleNumber = parseInt(scaleMatch[1], 10);
-    currentScale = `scale${scaleNumber}`;
-    console.log(currentScale)
-  }
-  // Check for gross weight (G) line
-  const grossWeightMatch = data.match(/^G\s+(-?\d+)\s*kg/);
-  if (grossWeightMatch && currentScale) {
-    console.log(`matched gaw:${grossWeightMatch} <===>   scale:${currentScale} `)
-    latestWeights[currentScale] = parseInt(grossWeightMatch[1], 10);
-    readings = `${latestWeights.scale1 || 0} kg, ${latestWeights.scale2 || 0} kg, ${latestWeights.scale3 || 0} kg, ${latestWeights.scale4 || 0} kg,`;
-    //console.log(`Updated ${currentScale} gross weight to ${latestWeights[currentScale]} kg`);
-    // Reset current scale after reading G to prevent overwriting until next scale number
-      console.log("Readings=>"+readings);
-      currentScale = null; // Reset current scale
-    }
-});
-//myPort.on("close", showPortClose);
-myPort.on("error", (error)=>{
-  console.log(error)
-});
-//soundalarm(longAlarm);
-
+}
 function readSerialData(data) {
   var reads = data;
   if (indicator == "Cardinal" && data.length > 89) {
@@ -189,24 +218,12 @@ function readSerialData(data) {
     reads = dd;
     console.log(dd);
   }
-  if (indicator == "1310") {
-    const scaleMatch = data.match(/Scale No:\s+(\d+)/);
-    if (scaleMatch) {
-      const scaleNumber = parseInt(scaleMatch[1], 10);
-      currentScale = `scale${scaleNumber}`;
-      console.log(currentScale)
-    }
-    // Check for gross weight (G) line
-    const grossWeightMatch = data.match(/^G\s+(-?\d+)\s*kg/);
-    if (grossWeightMatch && currentScale) {
-      console.log(`matched gaw:${grossWeightMatch} <===>   scale:${currentScale} `)
-      latestWeights[currentScale] = parseInt(grossWeightMatch[1], 10);
-      readings = `${latestWeights.scale1 || 0} kg, ${latestWeights.scale2 || 0} kg, ${latestWeights.scale3 || 0} kg, ${latestWeights.scale4 || 0} kg,`;
-      console.log(`Updated ${currentScale} gross weight to ${latestWeights[currentScale]} kg`);
-      // Reset current scale after reading G
-      currentScale = null;
-      return;
-    }
+  if (indicator != "Cardinal" && indicator != "Cardinal2" && indicator != "ZM" ) {
+    readings = data + ",";
+    RDU.readings = data + ",";
+    module.exports.readings = data + ",";
+    reads = data + ",";
+    //sendtoRDU(reads);
   }
 }
 function sendtoRDU(reads) {
@@ -215,6 +232,42 @@ function sendtoRDU(reads) {
   RDU3.readings = reads.trim();
   RDU4.readings = reads.trim();
   RDU5.readings = reads.trim();
+}
+function getweight(str) {
+  var float = 0,
+    sign,
+    order,
+    mantiss,
+    exp,
+    int = 0,
+    multi = 1;
+  if (/^0x/.exec(str)) {
+    int = parseInt(str, 16);
+  } else {
+    for (var i = str.length - 1; i >= 0; i -= 1) {
+      if (str.charCodeAt(i) > 255) {
+        console.log("Wrong string parametr");
+        return false;
+      }
+      int += str.charCodeAt(i) * multi;
+      multi *= 256;
+    }
+  }
+  sign = int >>> 31 ? -1 : 1;
+  exp = ((int >>> 23) & 0xff) - 127;
+  mantiss = ((int & 0x7fffff) + 0x800000).toString(2);
+  for (i = 0; i < mantiss.length; i += 1) {
+    float += parseInt(mantiss[i]) ? Math.pow(2, exp) : 0;
+    exp--;
+  }
+  console.log(float * sign);
+  return Math.floor((float * sign + 5) / 10) * 10;
+}
+function showPortClose() {
+  console.log("port closed.");
+}
+function showError(error) {
+  console.log("Serial port error: " + error);
 }
 function getcurrentdate() {
   let d = new Date();
@@ -308,6 +361,11 @@ function getIPAddress() {
   return "0.0.0.0";
 }
 function callseeweight() {
+  // player.play(audioFile, (err) => {
+  //   if (err) {
+  //     console.error("Error playing audio:", err);
+  //   }
+  // });
   var deckW = readings.split(",");
   var a = 0;
   var b = 0;
@@ -468,7 +526,7 @@ function callseeweight() {
         //console.log(resp.data[0]);
         autoweighReturn = resp.data;
         var anprip =
-          "http://192.168.4.11:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Webuye234&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+          "http://192.168.5.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         anprip =
           "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.5.57:80/jpg/image.jpg?size=3";
 
@@ -508,11 +566,33 @@ function callseeweight() {
           .catch((e) => {
             console.log(e);
           });
+        /////////////////////////////////////////
+        // var myUrl =
+        //   endpoint +
+        //   "/UploadFile/CaptureImage?url=" +
+        //   "http://192.168.51.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/" +
+        //   dir +
+        //   "&imageName=AUTOF" +
+        //   stationcode +
+        //   autoweighReturn.id +
+        //   ".jpg&username=admin&password=ROOT12345";
+
+        // axios
+        //   .get(myUrl, headers)
+        //   .then(() => {})
+        //   .catch((e) => {
+        //     console.log(e + myUrl);
+        //   });
+        /////////////////////////////////////////
+        // var JURUAoverviewip =
+        // "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.51.104:80/cgi-bin/viewer/video.jpg&dir=";
+
         var overviewip =
           "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.51.104:80/cgi-bin/viewer/video.jpg&dir=";
         overviewip =
           "http://192.168.5.12:5002/kenload/dashboard/getimg.php?string=http://192.168.5.52:80/jpg/image.jpg?size=3";
 
+        //var JURUA ="http://192.168.51.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         if (scandeck == "A") {
           overviewip =
             "http://192.168.3.22:5002/kenload/dashboard/getimg.php?string=http://192.168.3.111:80/cgi-bin/viewer/video.jpg&dir=";
@@ -589,6 +669,22 @@ function callseeweight() {
     veharrive = 2;
     scalestatus = "Vehicle on Deck";
   }
+
+  //    const json = JSON.stringify({ answer: 42 });
+  //    var headers = {headers: {
+  //                        'Content-Type': 'application/json'
+  //                    }
+  //                };
+  //                const res = axios.post('https://' + server + ':' + serverport + '/api/autoweigh', json, headers).then(() => {
+  //                    console.log("Inserted");
+  //                    inserted = 1;
+  //                }).catch((e) => {
+  //                    console.log("Error"+e +'https://' + server + ':' + serverport + '/api/autoweigh');
+  //                });
+  //                res.data.data;
+  //                res.data.headers['Content-Type'];
+
+  //console.log(tot);
 }
 function setrec() {
   prog = 0;
@@ -674,6 +770,18 @@ app.post("/weights", cors(), (req, res) => {
   autoweighReturn.nplate = req.body.nplate;
   //autoweighReturn.wbtno = req.body.Weighbridgetransactionsid;
   autoweighReturn.anpr = scananpr;
+  /**
+   *  wbrg_ticket_no: 'ROMIA202209000004',
+   wbrg_ticket_gvwload: 0,
+   wbrg_ticket_axleload: 0,
+   wbrg_ticket_grossweight: 9770,
+   wbrg_ticket_dateout: '2022-09-15T14:46:32',
+   wbrg_ticket_axel: '2A',
+   Weighbridgetransactionsid: 1162313,
+   timestamp: '2022-09-15T14:46:32',
+   nplate: 'TESTNO2',
+   weightaken: 1
+   */
   veharrive = 5;
   token = getToken();
   var headers = {
