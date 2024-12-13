@@ -1,0 +1,30 @@
+{
+  "name": "IconnectKNRB",
+  "version": "1.0.0",
+  "description": "Iconnect for scale connections",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": "",
+  "keywords": [
+    "Electron",
+    "quick",
+    "start",
+    "tutorial",
+    "demo"
+  ],
+  "author": "Zeph & Titus",
+  "license": "CC0-1.0",
+  "devDependencies": {
+    "electron": "^21.0.1"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "fs": "^0.0.1-security",
+    "net": "^1.0.2",
+    "serialport": "^12.0.0"
+  }
+}
