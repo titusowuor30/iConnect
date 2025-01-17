@@ -1,4 +1,6 @@
-#iConnect
+# iConnect
+- iConnect is customized middleware software that runs inside electron. The Software focuses on reading data from serial devices i.e weight indicators(Avery Weigh Tronix) and so on. The system also integrates external hardware systems like, cameras, high speed weighing systems.
+
 ### powered by Electron
 ## quick-start-guide
 
