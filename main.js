@@ -21,7 +21,7 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: true,
       enableRemoteModule: true,
-      preload: nodePath.join(__dirname, 'getData.js')
+      preload: nodePath.join(__dirname, 'preload.js')
     }
   });
   mainwindow.on('close', (event) => {

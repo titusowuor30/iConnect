@@ -1,7 +1,6 @@
 const axios = require("axios");
 
 const SerialPort = require("serialport").SerialPort;
-//const Readline = SerialPort.parsers.Readline;
 const indicator = "ZM";
 const { ReadlineParser } = require("@serialport/parser-readline");
 var net = require("net");
@@ -9,22 +8,12 @@ const fs = require("fs");
 const cors = require("cors");
 var express = require("express");
 var app = express();
-//const ConsoleWindow = require("node-hide-console-window");
 const bodyParser = require("body-parser");
 var scananpr = "";
-// const player = require("play-sound")();
-// const audioFile = "C:/iconnect/audio/female/Enter-eng.mp3";
-// player.play(audioFile, (err) => {
-//   if (err) {
-//     console.error("Error playing audio:", err);
-//   }
-// });
-//app.use(bodyParser.json());
 var st = "Z1G 2        00kg";
 console.log("eee" + st.substring(4, 5));
-app.use(bodyParser.json({ type: "*/*" }));
-//app.use(bodyParser.urlencoded({ extended: true }));
-//app.use(express.json());
+// Middleware to parse JSON bodies
+app.use(bodyParser.json({ type: "*/*",limit: '100mb' })); 
 const RDU = require("./serialout.js");
 const RDU1 = require("./serialout1.js");
 const RDU2 = require("./serialout2.js");
@@ -45,27 +34,29 @@ var scan = 0;
 var veharrive = 0;
 var inserted = 0;
 var prog = 0;
-var bidirectional = true;
+var bidirectional = false;
 var scandeck = "";
-//var stationcode = "SWMMA";
-var endpoint = "http://192.168.9.14:4444/api";
+var endpoint = "http://localhost:44365/api";
+var anprbody={"plate":""};
 
 var dec1 = 0;
 var dec2 = 0;
 var dec3 = 0;
 var dec4 = 0;
 
-var stationcode = "ISKEA";
-var stationcode2 = "KESIA";
-//var endpoint = "http://192.168.3.22:4444/api";
-//var stationcode = "ATM1B";
-//var endpoint = "https://localhost:44365/api";
+//var stationcode = "NRBKA";
+var stationcode = "ATMBA";
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 var autoweighReturn = JSON.stringify({});
 var shortAlarm = 15;
 var longAlarm = 16;
 var autouser = "KenloadV2";
 var token = "";
+let portName = "COM1";
+let baudrate = 9600;
+var runsend = "";
+var readings = "  5200 kg, 12440 kg, 0 kg,  0 kg,";
+
 
 var headers = {
   headers: {
@@ -74,13 +65,17 @@ var headers = {
 };
 var scalestatus = "";
 const udp = require("dgram");
+const { Console } = require("console");
 const client = udp.createSocket("udp4");
-client.bind(13805);
-//buffer msg
+client.bind(13805, () => {
+  console.log("UDP server listening on 192.168.8.16:13805");
+});//buffer msg
 const data = Buffer.from("#01\r");
+console.log("udp data===>>"+data)
 client.on("message", (msg, info) => {
   var str = "";
   var va = 0;
+  console.log("udp data===>>"+msg+"====>info===>"+info)
   Array.from(msg.slice(24, msg.length), function (byte) {
     //str+=va+" "+(byte & 0xFF).toString(16)+" ";
     var sadio = (byte & 0xff).toString(16);
@@ -132,49 +127,55 @@ client.on("message", (msg, info) => {
   );
 });
 console.log("stationcode:" + stationcode);
-//sending msg
-//client.send(data, 1025, '10.0.0.122', error => {
-//if (error) {
-//    console.log(error)
-//    client.close()
-//} else {
-//    console.log('Data sent !!!')
-//}
-//});
 
-// get port name from the command line:
+//////TCP/////
+// Create a TCP client
+const tcpclient = new net.Socket();
+// Connect to the server
+tcpclient.connect(13805, "192.168.8.16", () => {
+    console.log("Connected to server");
+    // Send data to the server
+    const data = Buffer.from("#01\r");
+    console.log("Sending data: " + data.toString());
+    tcpclient.write(data);
+});
 
-// list serial ports:
-//let portName = process.argv[2];
-//let baudrate = process.argv[3];
-let portName = "COM1";
-let baudrate = 9600;
-//  ..let readings = "  10000 kg, 10000 kg, 10000 kg,  10000 kg,";
-//let readings = "  5050 kg, 10000 kg, 16500 kg,  0 kg,";
-let readings = "  8000 kg, 10500 kg, 0 kg,  0 kg,";
-//let readings = "  7100 kg, 19920 kg, 8880 kg,  13880 kg,";
-//let readings = "  10200 kg, 12900 kg,  26900 kg,0 kg, ";
-//let readings = " 888888 kg, 888888 kg, 888888 kg,  888888 kg,";
-//let readings = " 1000 kg,";
-//let readings = " 10200 kg,";
-// SerialPort.list().then(function (ports) {
-//   ports.forEach(function (port) {
-//     console.log("Port: ", port.path);
-//     portName = port.path;
-//   });
-// });
-var runsend = "";
+// Handle incoming TCP data
+tcpclient.on("data", (data) => {
+  const response = data.toString().trim();
+  console.log("Raw response from server: " + response);
+
+  const weights = response.match(/(\d+)\s*kg/g);
+  if (weights) {
+      const formattedWeights = weights.map(weight => weight.trim());
+      while (formattedWeights.length < 4) {
+          formattedWeights.push("0 kg");
+      }
+       readings = formattedWeights.slice(0, 4).join(", ") + ", ";
+  } else {
+      readings = "0 kg, 0 kg, 0 kg, 0 kg, ";
+  }
+
+  console.log("Formatted readings: " + readings);
+});
+
+// Handle client errors
+tcpclient.on("error", (err) => {
+    console.error(`Error: ${err.message}`);
+});
+
+// Handle client close
+tcpclient.on("close", () => {
+    console.log("Connection closed");
+});
+
 console.log(portName);
 const myPort = new SerialPort({
   path: portName,
   baudRate: baudrate,
 });
-//parser: SerialPort.parsers.readline("\n")
+
 const parser = myPort.pipe(new ReadlineParser({ delimiter: "\r" }));
-//parser: new Readline("\n")
-//Readline = SerialPort.parsers.Readline;
-//let parser = new Readline();
-//myPort.pipe(parser);
 myPort.on("open", showPortOpen);
 parser.on("data", readSerialData);
 //myPort.on("close", showPortClose);
@@ -569,15 +570,15 @@ function callseeweight() {
         //console.log(resp.data[0]);
         autoweighReturn = resp.data;
         var anprip =
-          "http://192.168.2.103:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Hawk2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+          "http://192.168.8.10:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         //var JURUA ="http://192.168.51.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         if (scandeck == "A") {
           anprip =
-            "http://192.168.2.103:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Hawk2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.8.10:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         if (scandeck == "D") {
           anprip =
-            "http://192.168.2.104:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.8.11:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         var theUrlanpr =
           endpoint +
@@ -628,15 +629,15 @@ function callseeweight() {
         // "http://192.168.51.12:5002/kenload/dashboard/getimg.php?string=http://192.168.51.104:80/cgi-bin/viewer/video.jpg&dir=";
 
         var overviewip =
-          "http://192.168.2.105:5002/kenload/dashboard/getimg.php?string=http://192.168.2.105:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+          "http://192.168.8.12:5002/kenload/dashboard/getimg.php?string=http://192.168.8.13:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         //var JURUA ="http://192.168.51.101:80/ISAPI/Streaming/channels/2/picture&username=admin&password=ROOT12345&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         if (scandeck == "A") {
           overviewip =
-            "http://192.168.2.105:5002/kenload/dashboard/getimg.php?string=http://192.168.2.105:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.8.12:5002/kenload/dashboard/getimg.php?string=http://192.168.8.13:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         if (scandeck == "D") {
           overviewip =
-            "http://192.168.2.104:5002/kenload/dashboard/getimg.php?string=http://192.168.2.105:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+            "http://192.168.8.12:5002/kenload/dashboard/getimg.php?string=http://192.168.8.13:80/ISAPI/Streaming/channels/1/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
         }
         var myUrloverview =
           overviewip +
@@ -655,11 +656,11 @@ function callseeweight() {
         if (scandeck != "") {
           if (scandeck == "D") {
             anprip =
-              "http://192.168.2.103:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Isinya2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+              "http://192.168.8.11:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
           }
           if (scandeck == "A") {
             anprip =
-              "http://192.168.2.103:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Hawk2024&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
+              "http://192.168.8.10:80/ISAPI/Streaming/channels/2/picture&username=admin&password=Kanyonyo2025&folderpath=E:/kenloadimg/kenload/dashboard/imgs/";
           }
           var theUrlanpr3 =
             endpoint +
@@ -685,43 +686,13 @@ function callseeweight() {
   if (tot > 100 && prog == 0) {
     setrec();
     if (inserted == 0) {
-      // const json = JSON.stringify({
-      //   deck1: 1000,
-      //   deck2: 2000,
-      // });
-      // deck1 : deck1
-      //        deck2 : deck2
-      //        "deck3" : deck3
-      //        "deck4" : deck4
-      //        "gvw" : gvw
-      //        "autodatetime:": autodatetime
-      //        "autoweighbridge:": autoweighbridge
-      //        "autouser:": autouser
-      //        "ipaddress:": ipaddress
-      //        "anpr:": anpr
-      //        "anprb:": anprb
-      //        "autostatus:": autostatus
+      
       inserted = 1;
     }
     veharrive = 2;
     scalestatus = "Vehicle on Deck";
   }
 
-  //    const json = JSON.stringify({ answer: 42 });
-  //    var headers = {headers: {
-  //                        'Content-Type': 'application/json'
-  //                    }
-  //                };
-  //                const res = axios.post('https://' + server + ':' + serverport + '/api/autoweigh', json, headers).then(() => {
-  //                    console.log("Inserted");
-  //                    inserted = 1;
-  //                }).catch((e) => {
-  //                    console.log("Error"+e +'https://' + server + ':' + serverport + '/api/autoweigh');
-  //                });
-  //                res.data.data;
-  //                res.data.headers['Content-Type'];
-
-  //console.log(tot);
 }
 function setrec() {
   prog = 0;
@@ -850,6 +821,39 @@ app.post("/scan", cors(), (req, res) => {
   scan = 0;
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end("Done");
+});
+
+// Endpoint for KeepAlive
+app.post('/NotificationInfo/KeepAlive', (req, res) => {
+    const { Active, DeviceID } = req.body;
+    // Log the received data
+    console.log('KeepAlive Data:', { Active, DeviceID });
+    // Send a response
+    res.status(200).json({ message: 'KeepAlive received', Active, DeviceID });
+});
+
+// Endpoint for TollgateInfo
+app.post('/NotificationInfo/TollgateInfo', (req, res) => {
+  const { Picture } = req.body; // Access the Picture object directly
+  //console.log('TollgateInfo Data:', Picture);
+  const plate = Picture?.Plate?.PlateNumber || ""; // Use optional chaining to safely access PlateNumber
+  if (plate) {
+      anprbody = { "plate": plate };
+  }
+  // Log the received data
+  console.log('TollgateInfo Data:', plate);
+  // Send a response
+  res.status(200).json({ message: 'TollgateInfo received', data: anprbody });
+});
+
+app.get("/anpr", cors(), function (req, res) {
+  // Webdriver test case code
+  res.set("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Credentials", true);
+  res.send(anprbody);
+  anprbody={"plate":""}
 });
 app.get("/weights", cors(), function (req, res) {
   // Webdriver test case code
